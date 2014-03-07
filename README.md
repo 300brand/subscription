@@ -8,27 +8,51 @@ the HTTP request as a logged in user.
 How it Works
 ------------
 
-    +--------------------------------+
-    | mysite.subscription.net/secret |
-    +--------------------------------+
-                    |
-                    |
-                    v
-                   / \
-                 /     \
-               / Cookies \
-               \  Good?  /
-                 \     /
-                   \ /
-                    |
-+------------------------+
-| Load config for mysite |
-+------------------------+
-
-+-----------------------------------------+
-| GET/POST login credentials to real site |
-+-----------------------------------------+
-
-+----------------+
-| Ensure success |
-
+         +--------------------------------+
+         | mysite.subscription.net/secret |
+         +--------------------------------+
+                         |
+                         |
+                         v
+                        / \
+                      /     \
+                    / Cookies \_____________.
+                    \  Good?  / Yep         |
+                      \     /               |
+                        \ /                 |
+                    Nope |                  |
+                         |                  |
+                         v                  |
+             +------------------------+     |
+             | Load config for mysite |     |
+             +------------------------+     |
+                         |                  |
+                         v                  |
+            +--------------------------+    |
+            | GET/POST login           |    |
+            | credentials to real site |    |
+            +--------------------------+    |
+                         |                  |
+                         v                  |
+                +----------------+          |
+                | Update cookies |          |
+                +----------------+          |
+                         |                  |
+                         v                  |
+               +------------------+         |
+               | Request /secret  |<--------+
+               +------------------+
+                         |
+                         v
+          +----------------------------+
+          | Rewrite any absolute URLs  |
+          | to mysite with URLs to     |
+          | mysite.subscription.net    |
+          +----------------------------+
+                         |
+                         v
+          +----------------------------+
+          | Transfer headers           |
+          |                            |
+          | io.Copy(resp.Wr, req.Body) |
+          +----------------------------+
