@@ -5,4 +5,4 @@ import (
 	"testing"
 )
 
-func Test(*testing.T) { gocheck.TestingT(t) }
+func Test(t *testing.T) { gocheck.TestingT(t) }
