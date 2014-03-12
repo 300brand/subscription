@@ -2,35 +2,51 @@ package main
 
 import (
 	"flag"
+	"github.com/300brand/subscription/authorize"
+	"github.com/300brand/subscription/config"
 	"github.com/300brand/subscription/samplesite"
+	"github.com/gorilla/handlers"
 	"io"
 	"log"
 	"net/http"
-	"net/http/cookiejar"
-	"net/url"
+	"os"
 	"strings"
 )
 
 var (
-	Sites         = make(map[string]SiteConfig)
 	UseSampleSite = flag.Bool("sample", false, "Use the internal sample site")
 	Addr          = flag.String("addr", ":8082", "Listen address")
+	ConfigFile    = flag.String("config", "/tmp/subscription.json", "Subscription config")
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	i := strings.IndexByte(r.Host, '.')
-	alias := r.Host[:i]
-	site, ok := Sites[alias]
-	if !ok {
+	alias := r.Host[:strings.IndexByte(r.Host, '.')]
+	domain, err := config.Get(alias)
+	if err != nil {
 		http.Error(w, "Invalid alias: "+alias, http.StatusBadRequest)
 		return
 	}
-	ref := new(url.URL)
-	*ref = *r.URL
-	ref.Host = ""
-	ref.Path = ref.Path
-	remoteURL := site.url.ResolveReference(ref)
 
+	auth, err := authorize.Get(domain.LoginType)
+	if err != nil {
+		http.Error(w, "Invalid authorizer: "+domain.LoginType, http.StatusBadRequest)
+		return
+	}
+
+	switch loggedIn, err := auth.LoggedIn(domain); true {
+	case err != nil:
+		http.Error(w, "Error checking logged in state: "+err.Error(), http.StatusInternalServerError)
+		return
+	case !loggedIn:
+		if err := auth.Login(domain); err != nil {
+			http.Error(w, "Error logging in: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+	}
+
+	remoteURL := domain.ResolveReference(r.RequestURI)
+
+	// Create request for remote site
 	req, err := http.NewRequest(r.Method, remoteURL.String(), r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -41,11 +57,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Header = r.Header
 
-	for i, c := range site.client.Jar.Cookies(remoteURL) {
-		log.Printf("[%d] Expires: %s", i, c)
-	}
-
-	resp, err := site.client.Do(req)
+	resp, err := domain.Client().Do(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -58,6 +70,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add(key, value)
 		}
 	}
+	w.Header().Add("X-Remote-URL", remoteURL.String())
 	w.WriteHeader(resp.StatusCode)
 
 	n, _ := io.Copy(w, resp.Body)
@@ -68,30 +81,21 @@ func main() {
 	flag.Parse()
 
 	if *UseSampleSite {
-		Sites["sample"] = SiteConfig{
-			Alias:        "sample_std",
-			Siteroot:     samplesite.Start(),
-			LoginType:    "standard",
-			Username:     samplesite.Username,
-			Password:     samplesite.Password,
-			LoginForm:    "/standard/login.form",
-			LoginDo:      "/standard/login.do",
-			LoginSuccess: "/standard/success",
-			LoginFailure: "/standard/failure",
-		}
-	}
-
-	for sub, site := range Sites {
-		var err error
-		if site.url, err = url.Parse(site.Siteroot); err != nil {
-			log.Fatalf("Error parsing %s: %s", site.Siteroot, err)
-		}
-		site.client = new(http.Client)
-		site.client.Jar, _ = cookiejar.New(nil)
-		log.Printf("Registered: %s -> %s", sub, site.Siteroot)
-		Sites[sub] = site
+		config.Add(&config.Domain{
+			Alias:     "sample",
+			Domain:    samplesite.Start(),
+			LoginType: "standard",
+			Username:  [2]string{"username", samplesite.Username},
+			Password:  [2]string{"password", samplesite.Password},
+			URLs: config.URLs{
+				Form:    "/standard/login.form",
+				Do:      "/standard/login.do",
+				Success: "/standard/success",
+			},
+		})
 	}
 
 	http.HandleFunc("/", handler)
-	log.Fatal(http.ListenAndServe(*Addr, nil))
+	h := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
+	log.Fatal(http.ListenAndServe(*Addr, h))
 }
