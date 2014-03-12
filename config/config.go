@@ -3,12 +3,22 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"sort"
 )
 
 var Config = &struct {
 	Domains Domains
 }{
 	Domains: make(Domains, 0, 64),
+}
+
+func Add(d *Domain) {
+	Config.Domains = append(Config.Domains, d)
+	sort.Sort(Config.Domains)
+}
+
+func Get(alias string) (*Domain, error) {
+	return Config.Domains.Get(alias)
 }
 
 func Load(filename string) (err error) {
