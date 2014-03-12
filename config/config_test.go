@@ -13,7 +13,7 @@ var _ = gocheck.Suite(new(ConfigSuite))
 func Test(t *testing.T) { gocheck.TestingT(t) }
 
 func (s *ConfigSuite) TestResolveReference(c *gocheck.C) {
-	cfg := Config{Domain: "http://test.com"}
+	cfg := Domain{Domain: "http://test.com"}
 	c.Assert(cfg.ResolveReference("/login").String(), gocheck.Equals, "http://test.com/login")
 	// Ensure the reference didn't stick
 	c.Assert(cfg.ResolveReference(".").String(), gocheck.Equals, "http://test.com/")
@@ -23,7 +23,7 @@ func (s *ConfigSuite) TestClient(c *gocheck.C) {
 	url := samplesite.Start()
 	defer samplesite.Close()
 
-	cfg := Config{Domain: url}
+	cfg := Domain{Domain: url}
 
 	resp, err := cfg.Client().Get(url + "/loggedin.check")
 	c.Assert(err, gocheck.IsNil)
