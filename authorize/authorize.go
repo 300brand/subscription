@@ -10,6 +10,24 @@ type Authorizer interface {
 	LoggedIn(cfg *config.Domain) (loggedIn bool, err error)
 }
 
+var authorizers = make(map[string]Authorizer)
+
 var (
-	ErrInvalidRedirect = errors.New("Invalid redirect after login")
+	ErrInvalidAuthorizer = errors.New("Invalid authorizer name")
+	ErrInvalidRedirect   = errors.New("Invalid redirect after login")
 )
+
+func Register(name string, a Authorizer) {
+	if _, ok := authorizers[name]; ok {
+		panic("Authorizer " + name + " already exists")
+	}
+	authorizers[name] = a
+}
+
+func Get(name string) (a Authorizer, err error) {
+	a, ok := authorizers[name]
+	if !ok {
+		return nil, ErrInvalidAuthorizer
+	}
+	return
+}

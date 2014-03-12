@@ -11,6 +11,10 @@ type Standard struct{}
 
 var _ Authorizer = new(Standard)
 
+func init() {
+	Register("standard", new(Standard))
+}
+
 func (a *Standard) Login(cfg *config.Domain) (err error) {
 	var baselineResp, loginResp *http.Response
 	// (Re)-Establish baseline cookies
