@@ -15,6 +15,7 @@ var authorizers = make(map[string]Authorizer)
 var (
 	ErrInvalidAuthorizer = errors.New("Invalid authorizer name")
 	ErrInvalidRedirect   = errors.New("Invalid redirect after login")
+	ErrUnauthorized      = errors.New("Unauthorized")
 )
 
 func Register(name string, a Authorizer) {
