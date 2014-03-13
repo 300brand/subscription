@@ -13,6 +13,14 @@ var Config = &struct {
 }
 
 func Add(d *Domain) {
+	if _, err := Get(d.Alias); err != ErrNotFound {
+		for i := range Config.Domains {
+			if Config.Domains[i].Alias == d.Alias {
+				Config.Domains = append(Config.Domains[:i], Config.Domains[i+1:]...)
+			}
+		}
+	}
+
 	Config.Domains = append(Config.Domains, d)
 	sort.Sort(Config.Domains)
 }
