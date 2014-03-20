@@ -1,9 +1,6 @@
 package relink
 
 import (
-	"fmt"
-	"strings"
-
 	"bytes"
 	"io"
 )
@@ -11,50 +8,54 @@ import (
 type Relink struct {
 	domainMap map[string]string
 	buf       *bytes.Buffer
-	w         io.Writer
-	insideUrl bool
+	r         io.Reader
+	filled    bool
 }
 
-var _ io.Writer = new(Relink)
+var _ io.Reader = new(Relink)
 
-func New(w io.Writer, domains map[string]string) *Relink {
+func New(r io.Reader, domains map[string]string) *Relink {
 	return &Relink{
 		domainMap: domains,
-		w:         w,
-		buf:       bytes.NewBuffer(make([]byte, 0, 256)),
+		r:         r,
+		buf:       bytes.NewBuffer(make([]byte, 0, 32*1024)),
 	}
 }
 
-func (r *Relink) Write(p []byte) (n int, err error) {
-	n = len(p)
-	if !r.insideUrl {
-		for idx := bytes.IndexByte(p, 'h'); idx > -1; idx = bytes.IndexByte(p, 'h') {
-			fmt.Printf("I: %s\nI: %s^\n", p, strings.Repeat(" ", idx))
-			switch {
-			case bytes.Equal(p[idx:idx+4] == []byte(`http`):
-				
-			}
-
-			fmt.Printf("Writing to w: %q\n", p[:idx])
-			if _, err := r.w.Write(p[:idx]); err != nil {
-				return n, err
-			}
-			p = p[idx+1:]
-		}
-		// fmt.Printf("Writing to buf: %q\n", p[idx:])
-		// r.buf.Write(p[idx:])
-	}
+func (r *Relink) FillBuffer() (err error) {
+	_, err = io.Copy(r.buf, r.r)
 	return
 }
 
-// strRe := `https?://([^/]+).?(` + strings.Join(s.TLDs, "|") + `)['"</]`
-// c.Logf("Regexp: %s", strRe)
-// re := regexp.MustCompile(strRe)
+func (r *Relink) Relink() (err error) {
+	prefixes := [][]byte{
+		[]byte(`https://`),
+		[]byte(`https://www.`),
+		[]byte(`http://`),
+		[]byte(`http://www.`),
+	}
+	relinked := r.buf.Bytes()
+	for from, to := range r.domainMap {
+		bTo := append([]byte(`http://`), []byte(to)...)
+		for _, prefix := range prefixes {
+			bFrom := append(prefix, []byte(from)...)
+			relinked = bytes.Replace(relinked, bFrom, bTo, -1)
+		}
+	}
+	r.buf.Reset()
+	_, err = r.buf.Write(relinked)
+	return
+}
 
-// r := io.TeeReader(buf, os.Stdout)
-
-// loc := re.Find(buf.Bytes())
-// c.Logf("%s - %v", test.In, loc)
-// if loc != nil {
-// 	c.Log(strings.Repeat(" ", loc[0]) + "^" + strings.Repeat("-", loc[1]-loc[0]-2) + "^")
-// }
+func (r *Relink) Read(p []byte) (n int, err error) {
+	if !r.filled {
+		if err = r.FillBuffer(); err != nil {
+			return
+		}
+		if err = r.Relink(); err != nil {
+			return
+		}
+		r.filled = true
+	}
+	return r.buf.Read(p)
+}
