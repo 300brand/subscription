@@ -14,6 +14,11 @@ type Relink struct {
 
 var _ io.Reader = new(Relink)
 
+var prefixes = [][]byte{
+	[]byte(`https://`),
+	[]byte(`http://`),
+}
+
 func New(r io.Reader, domains map[string]string) *Relink {
 	return &Relink{
 		domainMap: domains,
@@ -28,12 +33,6 @@ func (r *Relink) FillBuffer() (err error) {
 }
 
 func (r *Relink) Relink() (err error) {
-	prefixes := [][]byte{
-		[]byte(`https://`),
-		[]byte(`https://www.`),
-		[]byte(`http://`),
-		[]byte(`http://www.`),
-	}
 	relinked := r.buf.Bytes()
 	for from, to := range r.domainMap {
 		bTo := append([]byte(`http://`), []byte(to)...)
