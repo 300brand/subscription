@@ -2,6 +2,7 @@ package relink
 
 import (
 	"bytes"
+	"github.com/300brand/logger"
 	"io"
 )
 
@@ -33,16 +34,23 @@ func (r *Relink) FillBuffer() (err error) {
 }
 
 func (r *Relink) Relink() (err error) {
+	doReset := false
 	relinked := r.buf.Bytes()
 	for from, to := range r.domainMap {
 		bTo := append([]byte(`http://`), []byte(to)...)
 		for _, prefix := range prefixes {
 			bFrom := append(prefix, []byte(from)...)
-			relinked = bytes.Replace(relinked, bFrom, bTo, -1)
+			if bytes.Index(relinked, bFrom) > -1 {
+				doReset = true
+				relinked = bytes.Replace(relinked, bFrom, bTo, -1)
+			}
 		}
 	}
-	r.buf.Reset()
-	_, err = r.buf.Write(relinked)
+	if doReset {
+		logger.Debug.Printf("Doing reset and rewrite")
+		r.buf.Reset()
+		_, err = r.buf.Write(relinked)
+	}
 	return
 }
 

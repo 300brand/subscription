@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"sort"
 )
@@ -13,6 +12,7 @@ type Domains []*Domain
 type Domain struct {
 	Alias     string       // Site alias, also used for the subdomain
 	Domain    string       // Site URL root
+	Rewrite   []string     // Domains to rewrite to the subscription URL
 	LoginType string       // Login type, must be one of the available types
 	Username  [2]string    // Account username {field, value}
 	Password  [2]string    // Account password {field, value}
@@ -48,7 +48,7 @@ func (d Domains) Get(alias string) (*Domain, error) {
 func (d *Domain) Client() *http.Client {
 	if d.client == nil {
 		d.client = new(http.Client)
-		d.client.Jar, _ = cookiejar.New(nil)
+		d.client.Jar = NewCookieJar()
 	}
 	return d.client
 }

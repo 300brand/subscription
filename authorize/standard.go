@@ -3,7 +3,6 @@ package authorize
 import (
 	"github.com/300brand/logger"
 	"github.com/300brand/subscription/config"
-	"log"
 	"net/http"
 	"net/url"
 )
@@ -78,8 +77,8 @@ func (a *Standard) Login(cfg *config.Domain) (err error) {
 
 func (a *Standard) LoggedIn(cfg *config.Domain) (loggedIn bool, err error) {
 	name, value := cfg.Cookie[0], cfg.Cookie[1]
-	for i, c := range cfg.Client().Jar.Cookies(cfg.URL()) {
-		log.Printf("[%d] %s", i, c)
+	for _, c := range cfg.Client().Jar.Cookies(cfg.URL()) {
+		logger.Trace.Printf("%s = %s - Cookie: %s", name, value, c)
 		loggedIn = false ||
 			(name == c.Name && value == c.Value) ||
 			(name == c.Name && value == "") ||

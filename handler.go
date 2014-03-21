@@ -4,6 +4,7 @@ import (
 	"github.com/300brand/logger"
 	"github.com/300brand/subscription/authorize"
 	"github.com/300brand/subscription/config"
+	"github.com/300brand/subscription/relink"
 	"io"
 	"net/http"
 	"strings"
@@ -56,6 +57,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 	}
 	req.Header = r.Header
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1622.0 Safari/537.36")
 
 	resp, err := domain.Client().Do(req)
 	if err != nil {
@@ -64,6 +66,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Set up relinker
+	domainMap := make(map[string]string, len(domain.Rewrite))
+	for _, rw := range domain.Rewrite {
+		domainMap[rw] = r.Host
+	}
+	logger.Debug.Printf("domainMap: %+v", domainMap)
+	relinker := relink.New(resp.Body, domainMap)
+
 	for key, values := range resp.Header {
 		for _, value := range values {
 			logger.Trace.Printf("Adding header %s = %s", key, value)
@@ -71,8 +81,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Add("X-Remote-URL", remoteURL.String())
+	w.Header().Del("Content-Length")
+	w.Header().Del("Set-Cookie")
 	w.WriteHeader(resp.StatusCode)
 
-	n, _ := io.Copy(w, resp.Body)
+	n, _ := io.Copy(w, relinker)
 	logger.Info.Printf("%s -> %s %d %d", r.URL, remoteURL, resp.StatusCode, n)
 }

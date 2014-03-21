@@ -13,7 +13,7 @@ import (
 var (
 	UseSampleSite = flag.Bool("sample", false, "Use the internal sample site")
 	Addr          = flag.String("addr", ":8082", "Listen address")
-	ConfigFile    = flag.String("config", "/tmp/subscription.json", "Subscription config")
+	ConfigFile    = flag.String("config", "subscription.json", "Subscription config")
 )
 
 func main() {
