@@ -57,7 +57,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 	}
 	req.Header = r.Header
+	req.Header.Del("Accept-Encoding")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1622.0 Safari/537.36")
+	for key, values := range req.Header {
+		for _, value := range values {
+			logger.Trace.Printf("Sending header %s = %s", key, value)
+		}
+	}
 
 	resp, err := domain.Client().Do(req)
 	if err != nil {
