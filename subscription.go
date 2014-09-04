@@ -1,16 +1,15 @@
 package subscription
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"github.com/300brand/logger"
 	"github.com/elazarl/goproxy"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -31,34 +30,29 @@ type Handler struct {
 
 type Subscription struct {
 	*goproxy.ProxyHttpServer
+	Handler *Handler
 }
 
 var _ goproxy.ReqHandler = new(Handler)
 var _ goproxy.HttpsHandler = new(Handler)
-
-func init() {
-	pool := x509.NewCertPool()
-	pemCerts, err := ioutil.ReadFile("/etc/ssl/certs/ca-certificates.crt")
-	if err != nil {
-		logger.Error.Printf("[%03d] %s", err)
-	}
-	pool.AppendCertsFromPEM(pemCerts)
-	goproxy.MitmConnect.TlsConfig = new(tls.Config)
-	goproxy.MitmConnect.TlsConfig.RootCAs = pool
-}
+var Start = time.Now()
 
 func New() (s *Subscription) {
 	server := goproxy.NewProxyHttpServer()
 	server.Logger = logger.Trace
-	server.Verbose = true
+	server.Verbose = false
 
 	h := &Handler{
-		CookieJar: new(CookieJar),
+		CookieJar: NewCookieJar(),
 	}
 	server.OnRequest(s.WatchingOrigin()).Do(h)
 	server.OnRequest(s.WatchingOrigin()).HandleConnect(h)
 
-	s = &Subscription{server}
+	s = &Subscription{
+		Handler:         h,
+		ProxyHttpServer: server,
+	}
+
 	return
 }
 
@@ -93,11 +87,20 @@ func (s *Subscription) WatchingOrigin() goproxy.ReqConditionFunc {
 // If it returns nil,resp the proxy will skip sending any requests, and will
 // simply return the response `resp` to the client.
 func (h *Handler) Handle(reqIn *http.Request, ctx *goproxy.ProxyCtx) (reqOut *http.Request, respOut *http.Response) {
-	logger.Info.Printf("[%03d] %s", ctx.Session, reqIn.Host)
+	logger.Info.Printf("[%04d] Handle %s", ctx.Session, reqIn.URL)
+
+	path := fmt.Sprintf("/tmp/subscription/%s", Start.Format("2006-01-02T15.04.05"))
+	if err := os.MkdirAll(path, 0755); err != nil {
+		logger.Error.Fatalf("os.MkdirAll: %s", err)
+	}
+	out, err := os.Create(fmt.Sprintf("%s/%04d", path, ctx.Session))
+	if err != nil {
+		logger.Error.Fatalf("os.Create: %s", err)
+	}
 
 	client := new(http.Client)
 	client.Jar = h.CookieJar
-	respOut, err := client.Get(reqIn.URL.String())
+	respOut, err = client.Get(reqIn.URL.String())
 	if err != nil {
 		logger.Error.Printf("[%03d] ERROR %s - %s", ctx.Session, reqIn.URL, err)
 		respOut = goproxy.NewResponse(reqIn, goproxy.ContentTypeText, http.StatusForbidden, err.Error())
@@ -105,6 +108,8 @@ func (h *Handler) Handle(reqIn *http.Request, ctx *goproxy.ProxyCtx) (reqOut *ht
 	}
 
 	respOut.Header.Add("X-Subscription", fmt.Sprint(ctx.Session))
+	tee := &TeeReaderCloser{respOut.Body, out}
+	respOut.Body = tee
 	return
 }
 
